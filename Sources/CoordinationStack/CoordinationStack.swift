@@ -84,7 +84,7 @@ public struct CoordinationStack<Root: View>: View {
             sheet: sheetProxy,
             fullScreenSheet: fullScreenCoverProxy,
             popup: popupProxy,
-            dismissRoot: dismissRootProxy,
+            dismissRoot: dismissRootProxy
         )
         
         return navigationStack
