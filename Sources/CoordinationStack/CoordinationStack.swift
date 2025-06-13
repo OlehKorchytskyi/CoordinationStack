@@ -109,7 +109,7 @@ public struct CoordinationStack<Root: View>: View {
     }
     
     private var dismissRootProxy: DismissRootProxy {
-        DismissRootProxy { dismiss() }
+        DismissRootProxy { [dismiss] in dismiss() }
     }
     
     // MARK: Navigation Stack
@@ -159,7 +159,24 @@ public struct CoordinationStack<Root: View>: View {
             dismissRoot: dismissRootProxy
         )
         
-        return NavigationProxy(coordinator: coordinator) { destination, style in
+        return NavigationProxy(
+            coordinator: coordinator,
+            navigate: navigateProxy,
+            emitEvent: emitNavigationEventProxy
+        )
+    }
+    
+    private var navigateProxy: NavigateProxy {
+        let coordinator = CoordinatorProxy(
+            push: pushProxy,
+            pop: popProxy,
+            sheet: sheetProxy,
+            fullScreenSheet: fullScreenCoverProxy,
+            popup: popupProxy,
+            dismissRoot: dismissRootProxy
+        )
+        
+        return NavigateProxy { [navigationHandlerRegistry, nestedNavigationHandlerRegistry, coordinator] destination, style in
             let presenter = NavigationPresenter(style: style, coordinator: coordinator)
             
             if navigationHandlerRegistry.canNavigate(destination, using: presenter) {
@@ -179,18 +196,21 @@ public struct CoordinationStack<Root: View>: View {
                 
                 """)
             }
-        } componentEvent: { event in
-            let navigationProxy = NavigateProxy(navigationProxy: self.navigationProxy)
-            componentEventHandlerRegistry.handleEvent(event, using: navigationProxy)
+        }
+    }
+    
+    private var emitNavigationEventProxy: EmitNavigationEventProxy {
+        EmitNavigationEventProxy { [componentEventHandlerRegistry, navigateProxy] event in
+            componentEventHandlerRegistry.handleEvent(event, using: navigateProxy)
         }
     }
     
     private var sheetProxy: SheetProxy {
-        SheetProxy(sheet: { self.sheetItem = $0 })
+        SheetProxy(sheet: { [$sheetItem] in $sheetItem.wrappedValue = $0 })
     }
     
     private var fullScreenCoverProxy: SheetProxy {
-        SheetProxy(sheet: { self.fullScreenSheetItem = $0 })
+        SheetProxy(sheet: { [$fullScreenSheetItem] in $fullScreenSheetItem.wrappedValue = $0 })
     }
     
     private var pushProxy: PushProxy {
@@ -206,24 +226,24 @@ public struct CoordinationStack<Root: View>: View {
     @State private var dismissPopup: PopupDismissalOverride = .notOverridden
     
     private var popupProxy: PopupProxy {
-        PopupProxy { newPopup in
+        PopupProxy { [$popup,$dismissPopup] newPopup in
             // Checking if there is already presented popup
-            if let _ = popup {
+            if let _ = $popup.wrappedValue {
                 // Calling overwritten dismissal for currently presented popup
-                dismissPopup.perform {
+                $dismissPopup.wrappedValue.perform { [$popup] in
                     // Dismissing current
-                    self.popup = nil
+                    $popup.wrappedValue = nil
                     // presenting new one
-                    self.popup = newPopup
+                    $popup.wrappedValue = newPopup
                 }
             } else {
-                self.popup = newPopup
+                $popup.wrappedValue = newPopup
             }
-        } dismissPopup: { completion in
+        } dismissPopup: { [$popup,$dismissPopup] completion in
             // Calling overwritten dismissal
-            dismissPopup.perform {
+            $dismissPopup.wrappedValue.perform { [$popup] in
                 // Dismissing popup
-                self.popup = nil
+                $popup.wrappedValue = nil
                 completion?()
             }
         }
@@ -243,7 +263,7 @@ public struct CoordinationStack<Root: View>: View {
         }
         // Breaking presenter's coordination context
         .clearCoordinationContext()
-        // Supporting popup custom dismissal behaviour
+        // Supporting popup custom dismissal behavior
         .onPreferenceChange(PopupDismissalOverrideKey.self) { [$dismissPopup] popupDismissal in
             // Capturing state binding, for handling preference change, is the suggested approach by Apple engineers:
             // https://stackoverflow.com/a/79273163

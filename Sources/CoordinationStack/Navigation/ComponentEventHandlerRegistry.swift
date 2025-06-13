@@ -4,7 +4,12 @@ import SwiftUI
 struct ComponentEventHandlerRegistry: Sendable, Equatable {
     
     typealias EventHandler = @MainActor (ComponentEvent, NavigateProxy) -> Void
-    var registry: [ObjectIdentifier : EventHandler] = [:]
+    
+    // NOTE: It is safe to mark this property as nonisolated(unsafe) since:
+    // 1. EventHandler will be accessed only on MainActor
+    // 2. New key-value pairs will be added only on MainActor
+    // 3. keys are Sendable and can be accessed/changed
+    private nonisolated(unsafe) var registry: [ObjectIdentifier : EventHandler] = [:]
     
     @MainActor
     func handleEvent<Event: ComponentEvent>(_ event: Event, using navigate: NavigateProxy) {
@@ -23,8 +28,13 @@ struct ComponentEventHandlerRegistry: Sendable, Equatable {
         }
     }
     
+    @MainActor
     mutating func support<Event: ComponentEvent>(event: Event.Type, _ handler: @escaping EventHandler) {
         registry[ObjectIdentifier(Event.self)] = handler
+    }
+    
+    mutating func merger(_ other: Self) {
+        registry.merge(other.registry, uniquingKeysWith: { current, _ /*new*/ in current })
     }
     
     static func == (lhs: Self, rhs: Self) -> Bool {
@@ -80,6 +90,6 @@ enum NestedComponentEventHandlerRegistryKey: PreferenceKey {
     static let defaultValue: ComponentEventHandlerRegistry = .unhandled
     
     static func reduce(value: inout ComponentEventHandlerRegistry, nextValue: () -> ComponentEventHandlerRegistry) {
-        value.registry.merge(nextValue().registry, uniquingKeysWith: { current, _ /*new*/ in current })
+        value.merger(nextValue())
     }
 }

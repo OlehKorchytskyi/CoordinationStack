@@ -8,7 +8,7 @@ public protocol Navigation {
     @MainActor func global(destination: some GlobalDestination, style: NavigationPresenter.Style)
 }
 
-public protocol EmitNavigationEvent {
+public protocol EmitsNavigationEvent {
     @MainActor func after(event componentEvent: some ComponentEvent)
 }
 
@@ -17,23 +17,26 @@ protocol NavigationExtra {
     @MainActor func dismissRoot()
 }
 
-public struct NavigationProxy: Sendable, Navigation, EmitNavigationEvent, NavigationExtra {
+public struct NavigationProxy: Sendable, Navigation, EmitsNavigationEvent, NavigationExtra {
     
     let coordinator: CoordinatorProxy
+    let navigate: NavigateProxy
+    let emitEvent: EmitNavigationEventProxy
     
-    let globalDestination: @MainActor (GlobalDestination, NavigationPresenter.Style) -> Void
-    let componentEvent: @MainActor (ComponentEvent) -> Void
     
+    // MARK: Navigation
     @MainActor
     public func global(destination: some GlobalDestination, style: NavigationPresenter.Style) {
-        self.globalDestination(destination, style)
+        navigate.global(destination: destination, style: style)
     }
     
+    // MARK: EmitNavigationEvent
     @MainActor
     public func after(event componentEvent: some ComponentEvent) {
-        self.componentEvent(componentEvent)
+        emitEvent.after(event: componentEvent)
     }
     
+    // MARK: NavigationExtra
     @MainActor
     public func pop(toRoot: Bool = false) {
         coordinator.pop(toRoot: toRoot)
@@ -47,11 +50,21 @@ public struct NavigationProxy: Sendable, Navigation, EmitNavigationEvent, Naviga
 
 public struct NavigateProxy: Sendable, Navigation {
     
-    let navigationProxy: NavigationProxy
+    let globalDestination: @MainActor @Sendable (GlobalDestination, NavigationPresenter.Style) -> Void
     
     @MainActor
     public func global(destination: some GlobalDestination, style: NavigationPresenter.Style) {
-        navigationProxy.global(destination: destination, style: style)
+        self.globalDestination(destination, style)
+    }
+}
+
+public struct EmitNavigationEventProxy: Sendable, EmitsNavigationEvent {
+    
+    let componentEvent: @MainActor @Sendable (ComponentEvent) -> Void
+    
+    @MainActor
+    public func after(event componentEvent: some ComponentEvent) {
+        self.componentEvent(componentEvent)
     }
 }
 
@@ -84,12 +97,24 @@ public struct NavigationPresenter: Sendable {
     }
 }
 
-extension NavigationProxy {
-    static let unsupported = NavigationProxy(coordinator: .unsupported) { destination,_ in
-        assertionFailure("⚠️ Using NavigationProxy, to navigate \(String(describing: destination)) global destination, outside of the CoordinationStack.")
-    } componentEvent: { event in
-        assertionFailure("⚠️ Using NavigationProxy, to report component event \(String(describing: event)), outside of the CoordinationStack.")
+extension NavigateProxy {
+    static let unsupported = NavigateProxy { destination, _ in
+        assertionFailure("⚠️ Using NavigateProxy, to navigate \(String(describing: destination)) global destination, outside of the CoordinationStack.")
     }
+}
+
+extension EmitNavigationEventProxy {
+    static let unsupported = EmitNavigationEventProxy { event in
+        assertionFailure("⚠️ Using EmitNavigationEventProxy, to report component event \(String(describing: event)), outside of the CoordinationStack.")
+    }
+}
+
+extension NavigationProxy {
+    static let unsupported = NavigationProxy(
+        coordinator: .unsupported,
+        navigate: .unsupported,
+        emitEvent: .unsupported
+    )
 }
 
 public extension EnvironmentValues {
