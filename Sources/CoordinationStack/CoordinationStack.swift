@@ -47,22 +47,21 @@ import SwiftUI
  */
 public struct CoordinationStack<Root: View>: View {
     
-    @ViewBuilder let root: () -> Root
+    private let root: Root
 
     /// Creates a `CoordinationStack` that wraps the provided root view for coordinated presentation.
     /// - Parameter root: A closure returning the root view.
-    public init(@ViewBuilder _ root: @escaping () -> Root) {
-        self.root = root
+    public init(@ViewBuilder _ root: () -> Root) {
+        self.root = root()
     }
     
     @Environment(\.currentCoordinator) private var currentCoordinator
     
     /// The view content, showing either the coordinated stack with navigation and presentation proxies
     /// or the root content when already within a coordination context.
-    @ViewBuilder
     public var body: some View {
         if let _ = currentCoordinator {
-            root()
+            root
         } else {
             coordinatedStack
                 // Popups support
@@ -118,9 +117,9 @@ public struct CoordinationStack<Root: View>: View {
     
     private var navigationStack: some View {
         NavigationStack(path: $path) {
-            root()
+            root
                 .navigationDestination(for: PushProxy.Destination.self) { destination in
-                    destination.root()
+                    destination.root
                 }
         }
         .onPreferenceChange(NestedNavigationHandlerRegistryKey.self) { [$nestedNavigationHandlerRegistry] registry in

@@ -110,7 +110,7 @@ extension EmitNavigationEventProxy {
 }
 
 extension NavigationProxy {
-    static let unsupported = NavigationProxy(
+    public static let unsupported = NavigationProxy(
         coordinator: .unsupported,
         navigate: .unsupported,
         emitEvent: .unsupported
