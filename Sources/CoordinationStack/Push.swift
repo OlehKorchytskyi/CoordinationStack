@@ -7,21 +7,19 @@ public struct PushProxy: @unchecked Sendable {
     public var path: Binding<NavigationPath>
     
     @MainActor
-    private func callAsFunction<ID: Hashable, Destination: View>(id: ID, @ViewBuilder destination: () -> Destination) {
+    private func callAsFunction<ID: Hashable, Destination: View>(id: ID, @ViewBuilder destination: @escaping () -> Destination) {
         guard supported else {
             assertionFailure("⚠️ Using PushProxy outside of the CoordinationStack")
             return
         }
-        
-        let view = AnyView(destination())
-        
-        let destination = PushProxy.Destination(id: id, root: view)
+                
+        let destination = PushProxy.Destination(id: id, root: { AnyView(destination()) })
         
         path.wrappedValue.append(destination)
     }
     
     @MainActor
-    public func callAsFunction<Destination: View>(@ViewBuilder _ destination: () -> Destination) {
+    public func callAsFunction<Destination: View>(@ViewBuilder _ destination: @escaping () -> Destination) {
         callAsFunction(id: UUID(), destination: destination)
     }
 }
@@ -30,7 +28,7 @@ extension PushProxy {
     public struct Destination: Identifiable, Hashable {
         
         public let id: AnyHashable
-        let root: AnyView
+        let root: () -> AnyView
         
         public static func == (lhs: PushProxy.Destination, rhs: PushProxy.Destination) -> Bool {
             lhs.id == rhs.id

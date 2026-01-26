@@ -119,7 +119,7 @@ public struct CoordinationStack<Root: View>: View {
         NavigationStack(path: $path) {
             root
                 .navigationDestination(for: PushProxy.Destination.self) { destination in
-                    destination.root
+                    destination.root()
                 }
         }
         .onPreferenceChange(NestedNavigationHandlerRegistryKey.self) { [$nestedNavigationHandlerRegistry] registry in
