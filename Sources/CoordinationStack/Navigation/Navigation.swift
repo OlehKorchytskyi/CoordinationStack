@@ -19,7 +19,7 @@ protocol NavigationExtra {
 
 public struct NavigationProxy: Sendable, Navigation, EmitsNavigationEvent, NavigationExtra {
     
-    let coordinator: CoordinatorProxy
+    public let coordinator: CoordinatorProxy
     let navigate: NavigateProxy
     let emitEvent: EmitNavigationEventProxy
     

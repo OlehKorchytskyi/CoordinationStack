@@ -1,13 +1,13 @@
 import SwiftUI
 
 
-struct CoordinatorProxy: Sendable {
-    let push: PushProxy
-    let pop: PopProxy
-    let sheet: SheetProxy
-    let fullScreenSheet: SheetProxy
-    let popup: PopupProxy
-    let dismissRoot: DismissRootProxy
+public struct CoordinatorProxy: Sendable {
+    public let push: PushProxy
+    public let pop: PopProxy
+    public let sheet: SheetProxy
+    public let fullScreenSheet: SheetProxy
+    public let popup: PopupProxy
+    public let dismissRoot: DismissRootProxy
 }
 
 extension CoordinatorProxy {
