@@ -122,6 +122,7 @@ public struct CoordinationStack<Root: View>: View {
                     destination.root()
                 }
         }
+        .preference(key: CoordinationStackPathCountKey.self, value: path.count)
         .onPreferenceChange(NestedNavigationHandlerRegistryKey.self) { [$nestedNavigationHandlerRegistry] registry in
             // Capturing state binding, for handling preference change, is the suggested approach by Apple engineers:
             // https://stackoverflow.com/a/79273163
@@ -339,5 +340,15 @@ private extension View {
     
     func clearCoordinationContext() -> some View {
         modifier(_WithoutCoordinationContext())
+    }
+}
+
+struct CoordinationStackPathCountKey: PreferenceKey {
+    static let defaultValue: Int? = nil
+    
+    static func reduce(value: inout Int?, nextValue: () -> Int?) {
+        if let next = nextValue() {
+            value = next
+        }
     }
 }
