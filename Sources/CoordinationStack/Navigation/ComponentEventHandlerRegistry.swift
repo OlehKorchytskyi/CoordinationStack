@@ -12,6 +12,11 @@ struct ComponentEventHandlerRegistry: Sendable, Equatable {
     private nonisolated(unsafe) var registry: [ObjectIdentifier : EventHandler] = [:]
     
     @MainActor
+    func canHandleEvent<Event: ComponentEvent>(_ event: Event) -> Bool {
+        registry[ObjectIdentifier(Event.self)] != nil
+    }
+    
+    @MainActor
     func handleEvent<Event: ComponentEvent>(_ event: Event, using navigate: NavigateProxy) {
         if let dedicatedHandler = registry[ObjectIdentifier(Event.self)] {
             dedicatedHandler(event, navigate)

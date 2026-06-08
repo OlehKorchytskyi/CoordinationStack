@@ -199,8 +199,24 @@ public struct CoordinationStack<Root: View>: View {
     }
     
     private var emitNavigationEventProxy: EmitNavigationEventProxy {
-        EmitNavigationEventProxy { [componentEventHandlerRegistry, navigateProxy] event in
-            componentEventHandlerRegistry.handleEvent(event, using: navigateProxy)
+        EmitNavigationEventProxy { [componentEventHandlerRegistry, nestedComponentEventHandlerRegistry, navigateProxy] event in
+            if componentEventHandlerRegistry.canHandleEvent(event) {
+                // Handling event using handler from outside (above) CoordinationStack
+                componentEventHandlerRegistry.handleEvent(event, using: navigateProxy)
+            } else if nestedComponentEventHandlerRegistry.canHandleEvent(event) {
+                // Handling event using nested handler from CoordinationStack stack
+                nestedComponentEventHandlerRegistry.handleEvent(event, using: navigateProxy)
+            } else {
+                assertionFailure("""
+                ⚠️ Unhandled component event \(String(describing: event)). Use view modifier to navigation events:
+                <view>.handleComponentEvent(for: \(String(describing: type(of: event))).self) { event, navigate in
+                    switch event {
+                        
+                    }
+                }
+                
+                """)
+            }
         }
     }
     
