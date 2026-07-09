@@ -47,22 +47,21 @@ import SwiftUI
  */
 public struct CoordinationStack<Root: View>: View {
     
-    @ViewBuilder let root: () -> Root
+    private let root: Root
 
     /// Creates a `CoordinationStack` that wraps the provided root view for coordinated presentation.
     /// - Parameter root: A closure returning the root view.
-    public init(@ViewBuilder _ root: @escaping () -> Root) {
-        self.root = root
+    public init(@ViewBuilder _ root: () -> Root) {
+        self.root = root()
     }
     
     @Environment(\.currentCoordinator) private var currentCoordinator
     
     /// The view content, showing either the coordinated stack with navigation and presentation proxies
     /// or the root content when already within a coordination context.
-    @ViewBuilder
     public var body: some View {
         if let _ = currentCoordinator {
-            root()
+            root
         } else {
             coordinatedStack
                 // Popups support
@@ -109,7 +108,7 @@ public struct CoordinationStack<Root: View>: View {
     }
     
     private var dismissRootProxy: DismissRootProxy {
-        DismissRootProxy { dismiss() }
+        DismissRootProxy { [dismiss] in dismiss() }
     }
     
     // MARK: Navigation Stack
@@ -118,11 +117,12 @@ public struct CoordinationStack<Root: View>: View {
     
     private var navigationStack: some View {
         NavigationStack(path: $path) {
-            root()
+            root
                 .navigationDestination(for: PushProxy.Destination.self) { destination in
                     destination.root()
                 }
         }
+        .preference(key: CoordinationStackPathCountKey.self, value: path.count)
         .onPreferenceChange(NestedNavigationHandlerRegistryKey.self) { [$nestedNavigationHandlerRegistry] registry in
             // Capturing state binding, for handling preference change, is the suggested approach by Apple engineers:
             // https://stackoverflow.com/a/79273163
@@ -159,7 +159,24 @@ public struct CoordinationStack<Root: View>: View {
             dismissRoot: dismissRootProxy
         )
         
-        return NavigationProxy(coordinator: coordinator) { destination, style in
+        return NavigationProxy(
+            coordinator: coordinator,
+            navigate: navigateProxy,
+            emitEvent: emitNavigationEventProxy
+        )
+    }
+    
+    private var navigateProxy: NavigateProxy {
+        let coordinator = CoordinatorProxy(
+            push: pushProxy,
+            pop: popProxy,
+            sheet: sheetProxy,
+            fullScreenSheet: fullScreenCoverProxy,
+            popup: popupProxy,
+            dismissRoot: dismissRootProxy
+        )
+        
+        return NavigateProxy { [navigationHandlerRegistry, nestedNavigationHandlerRegistry, coordinator] destination, style in
             let presenter = NavigationPresenter(style: style, coordinator: coordinator)
             
             if navigationHandlerRegistry.canNavigate(destination, using: presenter) {
@@ -179,18 +196,37 @@ public struct CoordinationStack<Root: View>: View {
                 
                 """)
             }
-        } componentEvent: { event in
-            let navigationProxy = NavigateProxy(navigationProxy: self.navigationProxy)
-            componentEventHandlerRegistry.handleEvent(event, using: navigationProxy)
+        }
+    }
+    
+    private var emitNavigationEventProxy: EmitNavigationEventProxy {
+        EmitNavigationEventProxy { [componentEventHandlerRegistry, nestedComponentEventHandlerRegistry, navigateProxy] event in
+            if componentEventHandlerRegistry.canHandleEvent(event) {
+                // Handling event using handler from outside (above) CoordinationStack
+                componentEventHandlerRegistry.handleEvent(event, using: navigateProxy)
+            } else if nestedComponentEventHandlerRegistry.canHandleEvent(event) {
+                // Handling event using nested handler from CoordinationStack stack
+                nestedComponentEventHandlerRegistry.handleEvent(event, using: navigateProxy)
+            } else {
+                assertionFailure("""
+                ⚠️ Unhandled component event \(String(describing: event)). Use view modifier to navigation events:
+                <view>.handleComponentEvent(for: \(String(describing: type(of: event))).self) { event, navigate in
+                    switch event {
+                        
+                    }
+                }
+                
+                """)
+            }
         }
     }
     
     private var sheetProxy: SheetProxy {
-        SheetProxy(sheet: { self.sheetItem = $0 })
+        SheetProxy(sheet: { [$sheetItem] in $sheetItem.wrappedValue = $0 })
     }
     
     private var fullScreenCoverProxy: SheetProxy {
-        SheetProxy(sheet: { self.fullScreenSheetItem = $0 })
+        SheetProxy(sheet: { [$fullScreenSheetItem] in $fullScreenSheetItem.wrappedValue = $0 })
     }
     
     private var pushProxy: PushProxy {
@@ -206,24 +242,24 @@ public struct CoordinationStack<Root: View>: View {
     @State private var dismissPopup: PopupDismissalOverride = .notOverridden
     
     private var popupProxy: PopupProxy {
-        PopupProxy { newPopup in
+        PopupProxy { [$popup,$dismissPopup] newPopup in
             // Checking if there is already presented popup
-            if let _ = popup {
+            if let _ = $popup.wrappedValue {
                 // Calling overwritten dismissal for currently presented popup
-                dismissPopup.perform {
+                $dismissPopup.wrappedValue.perform { [$popup] in
                     // Dismissing current
-                    self.popup = nil
+                    $popup.wrappedValue = nil
                     // presenting new one
-                    self.popup = newPopup
+                    $popup.wrappedValue = newPopup
                 }
             } else {
-                self.popup = newPopup
+                $popup.wrappedValue = newPopup
             }
-        } dismissPopup: { completion in
+        } dismissPopup: { [$popup,$dismissPopup] completion in
             // Calling overwritten dismissal
-            dismissPopup.perform {
+            $dismissPopup.wrappedValue.perform { [$popup] in
                 // Dismissing popup
-                self.popup = nil
+                $popup.wrappedValue = nil
                 completion?()
             }
         }
@@ -243,7 +279,7 @@ public struct CoordinationStack<Root: View>: View {
         }
         // Breaking presenter's coordination context
         .clearCoordinationContext()
-        // Supporting popup custom dismissal behaviour
+        // Supporting popup custom dismissal behavior
         .onPreferenceChange(PopupDismissalOverrideKey.self) { [$dismissPopup] popupDismissal in
             // Capturing state binding, for handling preference change, is the suggested approach by Apple engineers:
             // https://stackoverflow.com/a/79273163
@@ -304,5 +340,15 @@ private extension View {
     
     func clearCoordinationContext() -> some View {
         modifier(_WithoutCoordinationContext())
+    }
+}
+
+struct CoordinationStackPathCountKey: PreferenceKey {
+    static let defaultValue: Int? = nil
+    
+    static func reduce(value: inout Int?, nextValue: () -> Int?) {
+        if let next = nextValue() {
+            value = next
+        }
     }
 }

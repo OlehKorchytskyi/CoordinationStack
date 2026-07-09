@@ -4,8 +4,14 @@ import SwiftUI
 struct NavigationHandlerRegistry: Sendable, Equatable {
     
     typealias NavigationHandler = @MainActor (GlobalDestination, NavigationPresenter) -> Void
-    var registry: [ObjectIdentifier : NavigationHandler] = [:]
     
+    // NOTE: It is safe to mark this property as nonisolated(unsafe) since:
+    // 1. NavigationHandler will be accessed only on MainActor
+    // 2. New key-value pairs will be added only on MainActor
+    // 3. keys are Sendable and can be accessed/changed
+    private nonisolated(unsafe) var registry: [ObjectIdentifier : NavigationHandler] = [:]
+    
+    @MainActor
     func canNavigate<Destination: GlobalDestination>(_ destination: Destination, using presenter: NavigationPresenter) -> Bool {
         registry[ObjectIdentifier(Destination.self)] != nil
     }
@@ -27,8 +33,13 @@ struct NavigationHandlerRegistry: Sendable, Equatable {
         }
     }
     
+    @MainActor
     mutating func support<Destination: GlobalDestination>(destination: Destination.Type, _ handler: @escaping NavigationHandler) {
         registry[ObjectIdentifier(Destination.self)] = handler
+    }
+    
+    mutating func merger(_ other: Self) {
+        registry.merge(other.registry, uniquingKeysWith: { current, _ /*new*/ in current })
     }
     
     static func == (lhs: Self, rhs: Self) -> Bool {
@@ -82,6 +93,6 @@ enum NestedNavigationHandlerRegistryKey: PreferenceKey {
     static let defaultValue: NavigationHandlerRegistry = .unhandled
     
     static func reduce(value: inout NavigationHandlerRegistry, nextValue: () -> NavigationHandlerRegistry) {
-        value.registry.merge(nextValue().registry, uniquingKeysWith: { current, _ /*new*/ in current })
+        value.merger(nextValue())
     }
 }
