@@ -86,13 +86,20 @@ public struct PopupContentPresenter<Content: View>: View {
                 }
                 
                 Task {
-                    try await Task.sleep(for: .seconds(0.5))
-                    dismiss()
-                    if isCanceled {
-                        onCancel?()
+                    do {
+                        try await Task.sleep(for: .seconds(0.5))
+                        dismiss()
+                        if isCanceled {
+                            onCancel?()
+                        }
+                        onDismiss?()
+                        postDismissalAction?()
+                    } catch is CancellationError {
+                        // Canceled
+                    } catch {
+                        // Skip dismissal and its callbacks if the delay is interrupted.
+                        print("⚠️ CoordinationStack: Popup dismissal delay was interrupted. Dismissal and its callbacks were skipped. Error: \(error)")
                     }
-                    onDismiss?()
-                    postDismissalAction?()
                 }
             }
         })

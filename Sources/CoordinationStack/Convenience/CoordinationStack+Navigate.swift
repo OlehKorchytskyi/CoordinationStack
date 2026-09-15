@@ -3,7 +3,7 @@ import SwiftUI
 extension CoordinationStack {
     @_disfavoredOverload
     public init<Content: View>(@ViewBuilder _ content: @escaping (NavigationProxy) -> Content) where Root == _ExposedNavigationProxyView<Content> {
-        self = CoordinationStack {
+        self.init {
             _ExposedNavigationProxyView(content: content)
         }
     }
